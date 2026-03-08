@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages]
+find = {}
+
+[project]
+name = "risk_oracle_env"
+version = "0.0.1" 
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "numpy",
+    "pandas",
+    'scipy',
+    "requests",
+    "matplotlib",
+    "seaborn",
+    "arch",
+    "scikit-learn",
+    "tqdm",
+]
+
+[project.optional-dependencies]
+dev = ["pylint"]
