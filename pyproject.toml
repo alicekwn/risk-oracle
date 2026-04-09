@@ -25,6 +25,8 @@ dependencies = [
     "arch",
     "scikit-learn",
     "tqdm",
+    "fear-and-greed-crypto",
+    "xgboost",
 ]
 
 [project.optional-dependencies]

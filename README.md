@@ -63,7 +63,21 @@ pip install -e ".[dev]"
 
 ## Scripts 
 
+### Fetch data
+
+Fetch OHLC, market cap, volume data from cyptocompare (only for BTC, ETH, LTC, DOGE, BCH):
+```
+python scripts/fetch_cryptocompare.py
+```
+Fetch fear and greed index:
+```
+python scripts/fetch_fear_greed.py
+```
+
+
+### Traditional Economics Model
 Estimate the GJR-GARCH model with t-residuals and compute and display annualised conditional volatility.
 ```
 python scripts/gjr_garch.py
 ```
+
