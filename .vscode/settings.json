@@ -2,7 +2,7 @@
     "editor.formatOnSave": true,
     "editor.formatOnSaveMode": "file",
     "python.formatting.provider": "none",
-    "python.linting.enabled": true,
+    "pylint.enabled": true,
     "editor.formatOnPaste": false,
     "todo-tree.tree.scanMode": "workspace",
     "python.testing.pytestArgs": [
