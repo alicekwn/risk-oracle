@@ -41,6 +41,7 @@ NON_FEATURE_COLS = {
 }
 
 
+# ---------- Model variant dataclass ----------
 @dataclass
 class ModelVariant:
     """
@@ -56,22 +57,73 @@ class ModelVariant:
     excluded_features: set[str] = field(default_factory=set)
 
 
+# Features kept by the "simple" variant — only raw price/vol primitives and F&G.
+_SIMPLE_KEEP = {
+    "ret_lag1",
+    "ret_lag2",
+    "ret_lag3",
+    "ret_lag5",
+    "ret_lag7",
+    "ret_lag10",
+    "ret_mean_3d",
+    "ret_mean_5d",
+    "ret_mean_10d",
+    "volatility_5d",
+    "volatility_10d",
+    "volatility_30d",
+    "range_ma_5d",
+    "range_ma_10d",
+    "fear_greed_index",
+    "fg_lag1",
+    "fg_lag2",
+}
+
+# Top-15 features by gain from the garch_scaled feature importance chart.
+_TOP15_FEATURES = {
+    "range_ma_10d",
+    "fg_lag1",
+    "is_extreme_fear",
+    "volatility_10d",
+    "downside_vol_10d",
+    "vol10_lag1",
+    "ret_min_10d",
+    "fear_greed_index",
+    "ret_mean_5d",
+    "fg_lag2",
+    "ret_q10_10d",
+    "vol5_change_lag1",
+    "downside_vol_5d",
+    "mcap_z_30d",
+    "vol_lag1",
+}
+
 VARIANTS: list[ModelVariant] = [
     ModelVariant(
-        name="garch_scaled",  # GARCH-scaled model
+        name="garch_scaled",
         scaler_col="garch_vol_t",  # Use GARCH-vol as the scaler
-        excluded_features=set(),
+        excluded_features=set(),  # No excluded features
     ),
     ModelVariant(
         name="vol10d_scaled",
         scaler_col="volatility_10d",  # Use 10-day volatility as the scaler
         excluded_features={
             "garch_vol_t"
-        },  # Exclude GARCH-vol feature from the feature list
+        },  # Only exclude GARCH-vol from the feature list
+    ),
+    ModelVariant(
+        name="simple",
+        scaler_col="volatility_10d",  # Use 10-day volatility as the scaler
+        excluded_features=set(),  # keeps only _SIMPLE_KEEP
+    ),
+    ModelVariant(
+        name="simple_top15",
+        scaler_col="volatility_10d",  # Use 10-day volatility as the scaler
+        excluded_features=set(),  # keeps _SIMPLE_KEEP ∪ _TOP15_FEATURES
     ),
 ]
 
 
+# ---------- Load data ----------
 def load_data() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """
     Load price data and fear&greed index.
@@ -258,7 +310,7 @@ def train_xgb_quantile(
     X_val: pd.DataFrame,
     y_val: pd.Series,
 ) -> xgb.Booster:
-    """Single static fit (used for feature importance after rolling retrain)."""
+    """Static fit (used for feature importance after rolling retrain)."""
     print("\nTraining static XGBoost model (for feature importance) …")
     model = _fit_one(X_train, y_train, X_val, y_val, verbose=True)
     print(
@@ -303,8 +355,8 @@ def run_rolling_xgb(
     week_change = test_series.dt.isocalendar().week.ne(
         test_series.dt.isocalendar().week.shift(-1)
     )
-    eow_test = test_series[week_change].values
-    est_dates = np.concatenate([[val_end_date], eow_test[:-1]])
+    eow_test = test_series[week_change].values  # end of week test dates
+    est_dates = np.concatenate([[val_end_date], eow_test[:-1]])  # estimation dates
 
     records: list[pd.DataFrame] = []
 
@@ -315,28 +367,32 @@ def run_rolling_xgb(
     )
     for i, est_end in enumerate(est_dates):
         next_est = est_dates[i + 1] if i < len(est_dates) - 1 else all_dates[-1]
-        fcast_dates = all_dates[(all_dates > est_end) & (all_dates <= next_est)]
+        fcast_dates = all_dates[
+            (all_dates > est_end) & (all_dates <= next_est)
+        ]  # forecast dates
 
         if len(fcast_dates) == 0:
             continue
 
-        avail_dates = all_dates[all_dates <= est_end]
+        avail_dates = all_dates[all_dates <= est_end]  # available dates
         if len(avail_dates) < VAL_DAYS + 60:
             continue
 
-        val_cutoff = avail_dates[-VAL_DAYS]
-        train_mask = (panel.index < val_cutoff) & fit_mask
-        val_mask = (panel.index >= val_cutoff) & (panel.index <= est_end) & fit_mask
-        fcast_mask = panel.index.isin(fcast_dates)
+        val_cutoff = avail_dates[-VAL_DAYS]  # validation cutoff date
+        train_mask = (panel.index < val_cutoff) & fit_mask  # train mask
+        val_mask = (
+            (panel.index >= val_cutoff) & (panel.index <= est_end) & fit_mask
+        )  # validation mask
+        fcast_mask = panel.index.isin(fcast_dates)  # forecast mask
 
-        train_data = panel[train_mask]
-        val_data = panel[val_mask]
-        fcast_data = panel[fcast_mask]
+        train_data = panel[train_mask]  # train data
+        val_data = panel[val_mask]  # validation data
+        fcast_data = panel[fcast_mask]  # forecast data
 
         X_tr = train_data[feature_cols].copy()
-        y_tr = y_scaled[train_mask]
+        y_tr = y_scaled[train_mask]  # training target
         X_vl = val_data[feature_cols].copy()
-        y_vl = y_scaled[val_mask]
+        y_vl = y_scaled[val_mask]  # validation target
         X_fc = fcast_data[feature_cols].copy()
 
         medians = X_tr.median()
@@ -344,10 +400,12 @@ def run_rolling_xgb(
         X_vl = X_vl.fillna(medians)
         X_fc = X_fc.fillna(medians)
 
-        model = _fit_one(X_tr, y_tr, X_vl, y_vl, verbose=False)
+        model = _fit_one(X_tr, y_tr, X_vl, y_vl, verbose=False)  # fit the model
 
-        scaled_preds = model.predict(xgb.DMatrix(X_fc))
-        var_pred = scaled_preds * fcast_data[variant.scaler_col].values
+        scaled_preds = model.predict(xgb.DMatrix(X_fc))  # predict the model
+        var_pred = (
+            scaled_preds * fcast_data[variant.scaler_col].values
+        )  # unscale the predictions
 
         chunk = pd.DataFrame(
             {
@@ -385,14 +443,13 @@ def evaluate_xgb(
     oos_results : pd.DataFrame
         Must have columns: y_true, var_pred, coin.  Indexed by date.
     panel : pd.DataFrame
-        Full feature panel — used to look up volatility_10d and fear_greed_index
-        for regime labelling.
+        Full feature panel — used to look up volatility_10d and fear_greed_index for regime labelling.
     label : str
         Label for the printed header.
     """
     # Attach regime labels from the panel (align by index).
-    panel_test = panel[panel.index.isin(oos_results.index)]
-    regimes = label_regimes(panel_test).reindex(oos_results.index)
+    panel_test = panel[panel.index.isin(oos_results.index)]  # panel of test data
+    regimes = label_regimes(panel_test).reindex(oos_results.index)  # regime labels
 
     results = oos_results.copy()
     results["regime"] = regimes.values
@@ -452,9 +509,7 @@ def _print_backtest_table(reports: list[dict]) -> None:
         )
 
 
-# ---------------------------------------------------------------------------
-# GJR-GARCH conditional vol series (feature + baseline)
-# ---------------------------------------------------------------------------
+# --------- GJR-GARCH conditional vol series (feature + baseline) ----------
 
 
 def compute_garch_vol_series(
@@ -722,6 +777,19 @@ def main() -> None:
     # Initial train / val / test split (boundaries shared with rolling retrain).
     train, val, _ = chronological_split(panel)
     val_end_date = val.index.max()
+
+    # Fill excluded_features for variants whose keep-set depends on panel columns.
+    for v in VARIANTS:
+        if v.name == "simple":
+            v.excluded_features = {
+                c for c in feature_cols_base if c not in _SIMPLE_KEEP
+            }
+        elif v.name == "simple_top15":
+            v.excluded_features = {
+                c
+                for c in feature_cols_base
+                if c not in (_SIMPLE_KEEP | _TOP15_FEATURES)
+            }
 
     # GJR-GARCH baseline VaR is the same across variants — compute once.
     btc_full_dates = panel[panel["coin"] == "BTC"].index
