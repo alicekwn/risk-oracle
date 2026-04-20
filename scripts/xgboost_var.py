@@ -2,6 +2,13 @@
 XGBoost quantile VaR model for BTC and ETH.
 
 Trains a 5% quantile regression model using a rich set of market, sentiment, stress, and cross-asset features, then compares its tail-risk forecasts against the GJR-GARCH(1,1,1) baseline from Out-of-Sample Simulations.py.
+
+Runs four ablation variants:
+1. `garch_scaled` (full features, GJR-GARCH scaler),
+2. `vol10d_scaled` (full features, 10-day vol scaler),
+3. `simple` (17 basic price/vol/F&G features),
+4. `simple_top15` (simple ∪ top-15 features by gain)
+
 """
 
 import warnings

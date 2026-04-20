@@ -81,3 +81,16 @@ Estimate the GJR-GARCH model with t-residuals and compute and display annualised
 python scripts/gjr_garch.py
 ```
 
+### XGBoost Model
+
+Trains VaR model for BTC and ETH using an expanding-window weekly retrain. 
+
+Runs four ablation variants:
+1. `garch_scaled` (full features, GJR-GARCH scaler), 
+2. `vol10d_scaled` (full features, 10-day vol scaler), 
+3. `simple` (17 basic price/vol/F&G features), 
+4. `simple_top15` (simple ∪ top-15 features by gain)
+
+```
+python scripts/xgboost_var.py
+```
