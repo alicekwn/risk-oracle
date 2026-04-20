@@ -5,7 +5,7 @@ Trains a 5% quantile regression model using a rich set of market, sentiment, str
 
 Runs four ablation variants:
 1. `garch_scaled` (full features, GJR-GARCH scaler),
-2. `vol10d_scaled` (full features, 10-day vol scaler),
+2. `vol10d_scaled` (excluding garch, 10-day vol scaler),
 3. `simple` (17 basic price/vol/F&G features),
 4. `simple_top15` (simple ∪ top-15 features by gain)
 
